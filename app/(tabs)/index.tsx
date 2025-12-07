@@ -1,98 +1,127 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { Alert, FlatList, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
 
-export default function HomeScreen() {
+// const MOCK_CHATS = [
+//   { id: '1', username: 'Soporte', lastMessage: 'Bienvenido a Whisper App', time: '10:00 AM' },
+//   { id: '2', username: 'Haziel', lastMessage: '¿Ya terminaste el backend?', time: 'Yesterday' },
+//   { id: '3', username: 'Yuliana', lastMessage: 'Reunión a las 5pm', time: 'Monday' },
+// ];
+
+export default function ChatsScreen() {
+  const router = useRouter();
+
+  const openChat = (userId: string, username: string) => {
+    // Navegaremos a una ruta dinámica (la crearemos luego)
+    // Pasamos el ID y el nombre como parámetros
+    router.push({
+      pathname: "/chat/[id]",
+      params: { id: userId, name: username }
+    });
+  };
+
+  const handleNewChat = () => {
+    Alert.prompt(
+      "Nuevo Chat",
+      "Ingresa el ID o Usuario del destinatario:",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { 
+          text: "Chatear", 
+          onPress: (text: string | undefined) => {
+            if(text) openChat(text, text);
+          }
+        }
+      ],
+      "plain-text"
+    );
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <ThemedView style={styles.container}>
+      <View style={styles.header}>
+        <ThemedText type="title">Chats</ThemedText>
+        <TouchableOpacity>
+          <Ionicons name="search" size={24} color="#888" />
+        </TouchableOpacity>
+      </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      <FlatList
+        data={null}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <TouchableOpacity 
+            style={styles.chatItem} 
+            onPress={() => openChat(item.id, item.username)}
+          >
+            <View style={styles.avatar}>
+              <ThemedText style={styles.avatarText}>
+                {item.username.charAt(0).toUpperCase()}
+              </ThemedText>
+            </View>
+            <View style={styles.chatInfo}>
+              <View style={styles.chatTop}>
+                <ThemedText type="defaultSemiBold">{item.username}</ThemedText>
+                <ThemedText style={styles.time}>{item.time}</ThemedText>
+              </View>
+              <ThemedText numberOfLines={1} style={styles.lastMessage}>
+                {item.lastMessage}
+              </ThemedText>
+            </View>
+          </TouchableOpacity>
+        )}
+        ListEmptyComponent={
+          <ThemedText style={{textAlign: 'center', marginTop: 50, opacity: 0.5}}>
+            No tienes chats activos
+          </ThemedText>
+        }
+      />
+
+      {/* Botón Flotante (FAB) */}
+      <TouchableOpacity style={styles.fab} onPress={handleNewChat}>
+        <Ionicons name="add" size={30} color="#fff" />
+      </TouchableOpacity>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: { flex: 1, paddingHorizontal: 20, paddingTop: Platform.OS === 'android' ? 52 : 72 },
+  header: { 
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', 
+    marginBottom: 20 
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  chatItem: { 
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 15, 
+    borderBottomWidth: 1, borderBottomColor: 'rgba(150,150,150, 0.1)' 
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
+  avatar: { 
+    width: 50, height: 50, borderRadius: 25, backgroundColor: '#0a7ea4', 
+    justifyContent: 'center', alignItems: 'center', marginRight: 15 
+  },
+  avatarText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+  chatInfo: { flex: 1 },
+  chatTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  time: { fontSize: 12, opacity: 0.5 },
+  lastMessage: { opacity: 0.7 },
+  fab: {
     position: 'absolute',
-  },
+    right: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#0a7ea4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    bottom: 22,
+  }
 });
