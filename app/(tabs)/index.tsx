@@ -89,7 +89,7 @@ export default function ChatsScreen() {
         const totalUnread = data.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
         chatService.notifyUnreadCount(totalUnread);
     } catch (error) {
-        console.error("Error cargando chats:", error);
+        //console.error("Error cargando chats:", error);
     } finally {
         setLoading(false);
     }

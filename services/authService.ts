@@ -100,7 +100,7 @@ export const authService = {
       
       // 2. Si no está concedido, pedirlo explícitamente
       if (existingStatus !== 'granted') {
-        //console.log("📲 Pidiendo permiso de notificaciones...");
+        //console.log("Pidiendo permiso de notificaciones...");
         const { status } = await Notifications.requestPermissionsAsync({
           ios: {
             allowAlert: true,
@@ -113,7 +113,7 @@ export const authService = {
       
       // 3. Si el usuario dijo que NO anteriormente, avisarle
       if (finalStatus !== 'granted') {
-        //console.log("❌ Permiso denegado en iOS");
+        //console.log("Permiso denegado en iOS");
         // Opcional: Mostrar alerta para ir a ajustes
         Alert.alert(
           "Permisos requeridos",
