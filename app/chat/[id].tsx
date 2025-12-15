@@ -115,24 +115,42 @@ const AudioBubble = ({ url, isMyMessage, onError, textColor = '#fff' }: { url: s
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => { return () => { if (sound) sound.unloadAsync(); }; }, [sound]);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { 
+        isMounted.current = false;
+        if (sound) sound.unloadAsync(); 
+    }; 
+  }, [sound]);
 
   const handlePlayPause = async () => {
     if (sound) {
-      if (isPlaying) { await sound.pauseAsync(); setIsPlaying(false); } 
-      else { await sound.playAsync(); setIsPlaying(true); }
+      if (isPlaying) { await sound.pauseAsync(); if (isMounted.current) setIsPlaying(false); } 
+      else { await sound.playAsync(); if (isMounted.current) setIsPlaying(true); }
       return;
     }
-    setIsLoading(true);
+    
+    if (isMounted.current) setIsLoading(true);
     try {
       const fullUrl = url.startsWith('http') ? url : `${API_URL}${url}`;
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
       const { sound: newSound } = await Audio.Sound.createAsync({ uri: fullUrl }, { shouldPlay: true, isLooping: false });
-      setSound(newSound); setIsPlaying(true);
+      
+      if (isMounted.current) {
+          setSound(newSound); 
+          setIsPlaying(true);
+      }
+      
       newSound.setOnPlaybackStatusUpdate(async (status) => {
-        if (status.isLoaded && status.didJustFinish) { setIsPlaying(false); await newSound.stopAsync(); await newSound.setPositionAsync(0); }
+        if (status.isLoaded && status.didJustFinish) { 
+            setIsPlaying(false); 
+            await newSound.stopAsync(); 
+            await newSound.setPositionAsync(0); 
+        }
       });
-    } catch (error) { onError("Error", "No se pudo reproducir."); } finally { setIsLoading(false); }
+    } catch (error) { onError("Error", "No se pudo reproducir."); } finally { if (isMounted.current) setIsLoading(false); }
   };
 
   return (
@@ -240,7 +258,12 @@ export default function ChatScreen() {
   const recordingAnim = useRef(new Animated.Value(1)).current;
   const mountTime = useRef(Date.now()).current; 
 
+  // --- 1. Referencia para controlar si el componente está montado ---
+  const isMounted = useRef(true);
+
   useEffect(() => {
+    isMounted.current = true; // Componente montado
+
     if (!id) return;
     loadPartnerProfile();
     initializeChat();
@@ -251,19 +274,36 @@ export default function ChatScreen() {
     const subs = [
         chatService.subscribeToMessages((senderId) => { 
             if (senderId === id) { 
-                // 1. ELIMINAR TYPING AL RECIBIR MENSAJE
-                setIsTyping(false); 
+                if (isMounted.current) {
+                    // 1. ELIMINAR TYPING AL RECIBIR MENSAJE
+                    setIsTyping(false); 
+                }
                 refreshMessages(); 
                 chatService.markAsRead(id); 
             } 
         }),
-        chatService.subscribeToTyping((senderId, status) => { if (senderId === id) { setIsTyping(status); } }),
-        chatService.subscribeToReadReceipts((readerId) => { if (readerId === id) setMessages(prev => prev.map(msg => ({ ...msg, isRead: true }))); }),
-        chatService.subscribeToConnectionStatus((isConnected) => { if (isConnected) { refreshMessages(); chatService.markAsRead(id); chatService.setActiveChat(id); } })
+        chatService.subscribeToTyping((senderId, status) => { 
+            if (senderId === id && isMounted.current) { 
+                setIsTyping(status); 
+            } 
+        }),
+        chatService.subscribeToReadReceipts((readerId) => { 
+            if (readerId === id && isMounted.current) {
+                setMessages(prev => prev.map(msg => ({ ...msg, isRead: true }))); 
+            }
+        }),
+        chatService.subscribeToConnectionStatus((isConnected) => { 
+            if (isConnected) { 
+                refreshMessages(); 
+                chatService.markAsRead(id); 
+                chatService.setActiveChat(id); 
+            } 
+        })
     ];
 
 
     return () => {
+      isMounted.current = false; // --- 2. Componente desmontado, bloquear updates ---
       chatService.setActiveChat(null);
       subs.forEach(unsub => unsub());
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -274,24 +314,34 @@ export default function ChatScreen() {
   const loadPartnerProfile = async () => {
     try {
       const user = await userService.getUserById(id);
-      if (user) setChatPartner({ displayName: user.displayName || user.username, profilePicture: user.profilePicture || null });
+      // --- 3. Check antes de actualizar estado ---
+      if (isMounted.current && user) {
+          setChatPartner({ displayName: user.displayName || user.username, profilePicture: user.profilePicture || null });
+      }
     } catch (e) { console.log("Error perfil"); }
   };
 
   const initializeChat = async () => {
     const userId = await authService.getCurrentUserId();
-    setMyUserId(userId);
+    if (isMounted.current) setMyUserId(userId);
     await refreshMessages();
-    setLoading(false);
+    // --- 4. Check antes de quitar loading ---
+    if (isMounted.current) setLoading(false);
   };
 
   const refreshMessages = async () => {
     if (!id) return;
     const history = await chatService.getMessages(id);
-    setMessages(history.reverse());
+    // --- 5. Check antes de actualizar mensajes ---
+    if (isMounted.current) {
+        setMessages(history.reverse());
+    }
   };
 
   const showAlert = (title: string, message: string) => {
+    // Para alertas modales locales, también verificamos si está montado
+    if (!isMounted.current) return;
+
     if (Platform.OS === 'android') {
       setAlertTitle(title);
       setAlertMessage(message);
@@ -351,40 +401,60 @@ export default function ChatScreen() {
       if (permission.status !== 'granted') { showAlert("Permiso denegado", "Se requiere micrófono."); return; }
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
       const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording); setIsRecording(true);
-      setRecordingDuration(0);
-      recordingTimerRef.current = setInterval(() => { setRecordingDuration(prev => prev + 1); }, 1000);
-      startRecordingAnimation();
+      
+      if (isMounted.current) {
+          setRecording(recording); 
+          setIsRecording(true);
+          setRecordingDuration(0);
+          recordingTimerRef.current = setInterval(() => { 
+              if (isMounted.current) setRecordingDuration(prev => prev + 1); 
+          }, 1000);
+          startRecordingAnimation();
+      }
     } catch (err) { console.error('Fallo grabación', err); }
   };
 
   const cancelRecording = async () => {
     if (!recording) return;
     try { await recording.stopAndUnloadAsync(); } catch (e) { } 
-    setRecording(undefined); setIsRecording(false); setRecordingDuration(0);
+    
+    if (isMounted.current) {
+        setRecording(undefined); 
+        setIsRecording(false); 
+        setRecordingDuration(0);
+    }
     if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
   };
 
   const sendRecording = async () => {
     if (!recording) return;
-    setIsRecording(false);
+    
+    // Limpieza inmediata de UI
+    if (isMounted.current) setIsRecording(false);
     if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-    setRecordingDuration(0);
+    if (isMounted.current) setRecordingDuration(0);
+
     try {
         await recording.stopAndUnloadAsync();
         const uri = recording.getURI(); 
-        setRecording(undefined);
+        if (isMounted.current) setRecording(undefined);
         if (uri) await sendFileMessage(uri, 'audio/m4a', 'AUDIO');
     } catch (error) { console.error("Error stop grabación", error); }
   };
 
   const sendFileMessage = async (uri: string, mimeType: string, msgType: string) => {
       if (!id) return;
-      setIsUploading(true);
+      if (isMounted.current) setIsUploading(true);
+      
       const replyData = replyingTo ? { id: replyingTo.id || '', name: replyingTo.senderId === myUserId ? 'Tú' : chatPartner.displayName || 'Usuario', text: getPreviewText(replyingTo.content, replyingTo.type), type: replyingTo.type || 'TEXT' } : undefined;
-      setReplyingTo(null);
+      
+      if (isMounted.current) setReplyingTo(null);
+      
       try {
           const url = await chatService.uploadFile(uri, mimeType);
+          
+          if (!isMounted.current) return; // Si se desmontó mientras subía, salimos
+
           if (url) {
               const optimisticMsg: ChatMessage = { 
                 content: url, senderId: myUserId || 'ME', recipientId: id, type: msgType as any, isRead: false,
@@ -394,23 +464,37 @@ export default function ChatScreen() {
               setMessages(prev => [optimisticMsg, ...prev]);
               await chatService.sendMessage(url, id, msgType, replyData);
               refreshMessages();
-          } else { showAlert("Error", "No se pudo subir."); }
-      } catch (e) { console.error("Error envío", e); } finally { setIsUploading(false); }
+          } else { 
+              showAlert("Error", "No se pudo subir."); 
+          }
+      } catch (e) { 
+          console.error("Error envío", e); 
+      } finally { 
+          if (isMounted.current) setIsUploading(false); 
+      }
   };
 
   const handleSendText = async () => {
     if (!inputText.trim() || !id) return;
     const content = inputText.trim();
     const replyData = replyingTo ? { id: replyingTo.id || '', name: replyingTo.senderId === myUserId ? 'Tú' : chatPartner.displayName || 'Usuario', text: getPreviewText(replyingTo.content, replyingTo.type), type: replyingTo.type || 'TEXT' } : undefined;
-    setInputText(''); setReplyingTo(null);
+    
+    if (isMounted.current) {
+        setInputText(''); 
+        setReplyingTo(null);
+        
+        const optimisticMessage: ChatMessage = { 
+            content: content, senderId: myUserId || 'ME', recipientId: id, type: 'TEXT', isRead: false,
+            replyToId: replyData?.id, replyToName: replyData?.name, replyToText: replyData?.text, replyToType: replyData?.type as any,
+            timestamp: new Date().toISOString()
+        };
+        setMessages((prev) => [optimisticMessage, ...prev]);
+    }
 
-    const optimisticMessage: ChatMessage = { 
-        content: content, senderId: myUserId || 'ME', recipientId: id, type: 'TEXT', isRead: false,
-        replyToId: replyData?.id, replyToName: replyData?.name, replyToText: replyData?.text, replyToType: replyData?.type as any,
-        timestamp: new Date().toISOString()
-    };
-    setMessages((prev) => [optimisticMessage, ...prev]);
-    try { await chatService.sendMessage(content, id, 'TEXT', replyData); refreshMessages(); } catch (error) { console.error(error); }
+    try { 
+        await chatService.sendMessage(content, id, 'TEXT', replyData); 
+        refreshMessages(); 
+    } catch (error) { console.error(error); }
   };
 
   const handleInputChange = (text: string) => {

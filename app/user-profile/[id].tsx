@@ -1,6 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -32,13 +32,21 @@ export default function UserProfileScreen() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const isMounted = useRef(true);
+
   useEffect(() => {
+    isMounted.current = true;
     if (id) {
       userService.getUserById(id).then(u => {
-        setUser(u);
-        setLoading(false);
+        if (isMounted.current) { 
+          setUser(u);
+          setLoading(false);
+        }
       });
     }
+    return () => {
+      isMounted.current = false;
+    };
   }, [id]);
 
   if (loading) {

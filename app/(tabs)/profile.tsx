@@ -1,7 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import {
   ActivityIndicator,
@@ -51,8 +51,15 @@ export default function ProfileScreen() {
   const [alertMessage, setAlertMessage] = useState('');
   const [logoutVisible, setLogoutVisible] = useState(false);
 
+  const isMounted = useRef(true);
+
   useEffect(() => {
+    isMounted.current = true;
     loadUserData();
+    
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
 
   const loadUserData = async () => {
@@ -60,13 +67,18 @@ export default function ProfileScreen() {
     const uName = await authService.getUsername(); 
     const uEmail = await authService.getUserEmail();
     
-    setUsername(uName);
-    setEmail(uEmail);
-    setUserId(id);
+    // Check antes de actualizar
+    if (isMounted.current) {
+        setUsername(uName);
+        setEmail(uEmail);
+        setUserId(id);
+    }
 
     if (id) {
       const userProfile = await userService.getUserById(id);
-      if (userProfile) {
+      
+      // Check antes de actualizar perfil
+      if (isMounted.current && userProfile) {
         if (userProfile.displayName) setDisplayName(userProfile.displayName);
         if (userProfile.profilePicture) setImage(userProfile.profilePicture);
       }
@@ -74,6 +86,9 @@ export default function ProfileScreen() {
   };
 
   const showAlert = (title: string, message: string) => {
+    // Si ya no estamos en la pantalla, no mostramos alertas (evita errores en Android con modales)
+    if (!isMounted.current) return;
+
     if (Platform.OS === 'android') {
       setAlertTitle(title);
       setAlertMessage(message);
@@ -101,33 +116,36 @@ export default function ProfileScreen() {
 
     if (!result.canceled && result.assets[0].base64) {
       const base64Img = `data:image/jpeg;base64,${result.assets[0].base64}`;
-      setImage(base64Img);
-      handleUploadImage(base64Img);
+      
+      if (isMounted.current) {
+          setImage(base64Img); 
+          handleUploadImage(base64Img);
+      }
     }
   };
 
   const handleUploadImage = async (base64Img: string) => {
-    setUploadingImage(true);
+    if (isMounted.current) setUploadingImage(true);
     try {
       await userService.updateProfile(displayName, base64Img);
     } catch (e) {
       showAlert("Error", "No se pudo subir la imagen.");
     } finally {
-      setUploadingImage(false);
+      if (isMounted.current) setUploadingImage(false);
     }
   };
   // ------------------------
 
   const handleSaveDisplayName = async () => {
     if (!displayName.trim()) return;
-    setSaving(true);
+    if (isMounted.current) setSaving(true);
     try {
       await userService.updateProfile(displayName, null);
       showAlert("Éxito", "Nombre actualizado.");
     } catch (e) {
       showAlert("Error", "No se pudo actualizar el nombre.");
     } finally {
-      setSaving(false);
+      if (isMounted.current) setSaving(false);
     }
   };
 

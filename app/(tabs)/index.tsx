@@ -1,6 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   ActivityIndicator,
@@ -53,6 +53,8 @@ export default function ChatsScreen() {
   const [errorVisible, setErrorVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const isMounted = useRef(true);
+
   // --- LÓGICA DE CONEXIÓN ---
   useEffect(() => {
     const unsubscribe = chatService.subscribeToConnectionStatus((isConnected) => {
@@ -64,41 +66,60 @@ export default function ChatsScreen() {
     return () => { unsubscribe(); };
   }, []);
 
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   // --- LÓGICA AL ENFOCAR PANTALLA ---
   useFocusEffect(
     useCallback(() => {
       loadConversations(false);
+      
       const unsubscribeMessages = chatService.subscribeToMessages((senderId) => {
           //console.log("[Index] Nuevo mensaje. Actualizando orden...");
           loadConversations(false);
       });
+      
       chatService.setActiveChat(null); 
+      
       return () => unsubscribeMessages();
     }, [])
   );
 
   const loadConversations = async (showLoading = true) => {
-    if (showLoading) setLoading(true);
+    // Solo ponemos loading si el componente sigue vivo
+    if (showLoading && isMounted.current) setLoading(true);
+    
     try {
         if (!myUserId) {
              const id = await authService.getCurrentUserId();
-             setMyUserId(id);
+             // Check isMounted
+             if (isMounted.current) setMyUserId(id);
         }
+        
         const data = await chatService.getConversations();
-        setConversations(data);
-        const totalUnread = data.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
-        chatService.notifyUnreadCount(totalUnread);
+        
+        // Check isMounted antes de actualizar la lista
+        if (isMounted.current) {
+            setConversations(data);
+            const totalUnread = data.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0);
+            chatService.notifyUnreadCount(totalUnread);
+        }
     } catch (error) {
         //console.error("Error cargando chats:", error);
     } finally {
-        setLoading(false);
+        // Check isMounted crítico para evitar loop de carga
+        if (isMounted.current) setLoading(false);
     }
   };
   
   const onRefresh = async () => {
     setRefreshing(true);
     await loadConversations(false);
-    setRefreshing(false);
+    if (isMounted.current) setRefreshing(false);
   };
 
   const openChat = (userId: string, username: string) => {
@@ -111,8 +132,14 @@ export default function ChatsScreen() {
   const initiateChatSearch = async (usernameToFind: string) => {
     setPromptVisible(false);
     if (!usernameToFind.trim()) return;
-    setIsSearching(true);
+    
+    if (isMounted.current) setIsSearching(true);
+    
     const user = await chatService.findUserByUsername(usernameToFind.trim());
+    
+    // Si el usuario cerró la app o cambió de pantalla mientras buscaba, no hacemos nada
+    if (!isMounted.current) return;
+
     setIsSearching(false);
     setPromptVisible(false);
     setSearchUsername('');

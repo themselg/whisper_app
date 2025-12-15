@@ -1,1 +1,1 @@
-export const API_URL: string = 'http://192.168.100.94:8080'; 
+export const API_URL: string = 'http://hopper.proxy.rlwy.net:34957'; 
