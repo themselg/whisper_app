@@ -1,58 +1,68 @@
-import { Stack } from 'expo-router';
-import 'react-native-reanimated';
-
-import { authService } from '@/services/authService';
 import { useFonts } from 'expo-font';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { LogBox, View } from 'react-native'; // Importamos View
 import 'react-native-reanimated';
 
+import { ConnectionOverlay } from '@/components/connection-overlay'; // <--- Importamos componente
+import { setupAxiosInterceptors } from '@/config/axiosConfig';
+import { authService } from '@/services/authService';
+import { chatService } from '@/services/chatService';
 
-// Polyfills para STOMP en React Native
-import { TextDecoder, TextEncoder } from 'text-encoding';
-global.TextEncoder = TextEncoder;
-global.TextDecoder = TextDecoder;
+// Ignorar warnings
+LogBox.ignoreLogs(['expo-notifications:']);
 
-// Evita que el splash screen se oculte antes de tiempo si estás cargando fuentes
+setupAxiosInterceptors();
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [loaded] = useFonts({}); // No fonts to load
-  
   const router = useRouter();
+  const [loaded] = useFonts({});
+
+  // ESTADO PARA LA CONEXIÓN
+  const [isConnected, setIsConnected] = useState(true);
+
   useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync();
-      checkAuth();
+      checkAuthAndConnect();
     }
   }, [loaded]);
 
-  // --- LÓGICA DE PROTECCIÓN ---
-  const checkAuth = async () => {
+  const checkAuthAndConnect = async () => {
     try {
       const token = await authService.getToken();
-      // Si NO hay token, mandamos al Login
-      if (!token) {
+      if (token) {
+        chatService.connect();
+        authService.requestNotificationPermission();
+      } else {
         router.replace('/login');
-      } 
-      // Si HAY token, dejamos que fluya (por defecto irá a /(tabs))
+      }
     } catch (error) {
-      console.log("Error verificando auth", error);
       router.replace('/login');
     }
   };
 
-  if (!loaded) {
-    return null;
-  }
+  useEffect(() => {
+    const unsubscribe = chatService.subscribeToConnectionStatus((connected) => {
+      setIsConnected(connected);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  if (!loaded) return null;
 
   return (
-    <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      {/* Agregamos login y register al Stack para que existan como rutas navegables */}
-      <Stack.Screen name="login" options={{ headerShown: false }} />
-      <Stack.Screen name="register" options={{ title: 'Crear Cuenta' }} />
-    </Stack>
+    <View style={{ flex: 1 }}> 
+      <Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="register" options={{ headerShown: false }} />
+        <Stack.Screen name="chat/[id]" options={{ headerShown: true }} />
+      </Stack>
+
+      {!isConnected && <ConnectionOverlay />}
+    </View>
   );
 }

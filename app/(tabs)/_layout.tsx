@@ -1,57 +1,113 @@
-import { HapticTab } from '@/components/haptic-tab';
-import { Colors } from '@/constants/theme';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { chatService } from '@/services/chatService';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
-import React from 'react';
-import { Platform, useColorScheme } from 'react-native';
+import { Badge, Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
+import React, { useEffect, useState } from 'react';
+import { Platform, StyleSheet, View, useColorScheme } from 'react-native';
 
-function NativeTabsLayout() {
-  return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Label>Chats</Label>
-        <Icon sf={{ default: 'message', selected: 'message.fill' }} />
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="profile">
-        <Label>Perfil</Label>
-        <Icon sf={{ default: 'person', selected: 'person.fill' }} />
-      </NativeTabs.Trigger>
-    </NativeTabs>
-  );
-}
-
-function CustomTabsLayout() {
+export default function TabLayout() {
   const colorScheme = useColorScheme();
-  const themeColors = Colors[colorScheme ?? 'light'];
+  const isDark = colorScheme === 'dark';
 
+  // COLORES DINÁMICOS MD3
+  const md3Colors = {
+    background: isDark ? '#1e1e1e' : '#f0f2f5',
+    pillColor: '#0a7ea4', 
+    activeIcon: '#fff', 
+    activeLabel: isDark ? '#e6e1e5' : '#1d1b20', 
+    inactiveIcon: isDark ? '#c4c7c5' : '#444746',
+  };
+
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const unsubscribe = chatService.subscribeToUnreadCount((count) => {
+      setUnreadCount(count);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  // NativeTabs para iOS
+  if (Platform.OS === 'ios') {
+    return (
+      <NativeTabs>
+        <NativeTabs.Trigger name="index">
+          <Label>Chats</Label>
+          {unreadCount > 0 && <Badge>{unreadCount.toString()}</Badge>}
+          <Icon sf={{ default: 'message', selected: 'message.fill' }} />
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="profile">
+          <Label>Perfil</Label>
+          <Icon sf={{ default: 'person', selected: 'person.fill' }} />
+        </NativeTabs.Trigger>
+      </NativeTabs>
+    );
+  }
+
+  // Tabs personalizadas para Android
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: themeColors.tabIconSelected,
-        tabBarInactiveTintColor: themeColors.tabIconDefault,
+        tabBarActiveTintColor: md3Colors.activeLabel, 
+        tabBarInactiveTintColor: md3Colors.inactiveIcon,
         tabBarStyle: {
-          backgroundColor: themeColors.background,
+          backgroundColor: md3Colors.background,
+          height: 115,
+          paddingBottom: 10,
+          paddingTop: 10,
+          borderTopWidth: 0,
+          elevation: 0,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+          marginTop: 0,
         },
         headerShown: false,
-        // El HapticTab es solo para móvil, la web usará el botón por defecto.
-        tabBarButton: Platform.OS === 'web' ? undefined : HapticTab,
+        tabBarBadgeStyle: {
+          backgroundColor: '#b3261e',
+          color: 'white',
+          fontSize: 10,
+          height: 16,
+          minWidth: 16,
+          borderRadius: 8,
+          top: -4, 
+        }
       }}>
+      
       <Tabs.Screen
         name="index"
         options={{
           title: 'Chats',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'chatbubbles' : 'chatbubbles-outline'} size={24} color={color} />
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          tabBarIcon: ({ focused, color }) => (
+            // Usamos un View condicional para el fondo (Píldora)
+            <View style={[styles.pillContainer, { backgroundColor: focused ? md3Colors.pillColor : 'transparent' }]}>
+               <MaterialCommunityIcons 
+                  name={focused ? 'message-text' : 'message-text-outline'} 
+                  size={24} 
+                  // El icono cambia de color si está enfocado para contrastar con la píldora
+                  color={focused ? md3Colors.activeIcon : color} 
+               />
+            </View>
           ),
         }}
       />
+      
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Perfil',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
+          tabBarIcon: ({ focused, color }) => (
+             <View style={[styles.pillContainer, { backgroundColor: focused ? md3Colors.pillColor : 'transparent' }]}>
+                <MaterialCommunityIcons 
+                  name={focused ? 'account' : 'account-outline'} 
+                  size={24} 
+                  color={focused ? md3Colors.activeIcon : color} 
+                />
+             </View>
           ),
         }}
       />
@@ -59,14 +115,13 @@ function CustomTabsLayout() {
   );
 }
 
-/**
- * Componente principal de Layout que selecciona la implementación
- * de las pestañas según la plataforma del dispositivo.
- */
-export default function TabLayout() {
-  if (Platform.OS === 'ios') {
-    return <NativeTabsLayout />;
-  }
-  // Android y Web usarán las pestañas personalizadas.
-  return <CustomTabsLayout />;
-}
+const styles = StyleSheet.create({
+  pillContainer: {
+    width: 64,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+});
