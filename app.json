@@ -2,7 +2,7 @@
   "expo": {
     "name": "whisper_app",
     "slug": "whisper_app",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "whisperapp",
@@ -60,6 +60,12 @@
       "eas": {
         "projectId": "0a900cb4-7c98-400e-9b1a-a7f30c0953f3"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/0a900cb4-7c98-400e-9b1a-a7f30c0953f3"
     }
   }
 }

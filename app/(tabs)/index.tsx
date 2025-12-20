@@ -76,7 +76,7 @@ export default function ChatsScreen() {
   // --- LÓGICA AL ENFOCAR PANTALLA ---
   useFocusEffect(
     useCallback(() => {
-      loadConversations(false);
+      loadConversations(true);
       
       const unsubscribeMessages = chatService.subscribeToMessages((senderId) => {
           //console.log("[Index] Nuevo mensaje. Actualizando orden...");
